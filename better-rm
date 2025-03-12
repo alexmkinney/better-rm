@@ -1,0 +1,72 @@
+# Better rm implementation
+
+# Check if shell is interactive
+if [[ $- == *i* ]]; then
+    rm () {
+        # This makes Bash autocompletion work as intended for rm
+        [[ -n "$COMP_LINE" ]] && { command rm "$@"; return; }
+
+        set -o pipefail
+
+        local files=()
+        local dashdash_seen=0
+        local help_ver_flag_seen=0
+
+        # Strip out all command-line options (ls shouldn't get options meant for rm)
+        for arg in "$@"; do
+            # While we're checking every option, check if --help or --version (or a substring) is present
+            if [[ ("--help" == "$arg"* || "--version" == "$arg"*) && ${#arg} -ge 3 ]]; then
+                help_ver_flag_seen=1
+            fi
+
+            if (( dashdash_seen )); then
+                files+=("$arg")
+            elif [[ "$arg" == "--" ]]; then
+                dashdash_seen=1
+            elif [[ "$arg" == "-"* ]]; then
+                continue  # Skip options
+            else
+                files+=("$arg")
+            fi
+        done
+
+        # Only pass files/directories to ls, without options
+        # Exit if no files (but let lone --help and --version through)
+        if ((${#files[@]})) || ((help_ver_flag_seen)); then
+            local ls_output ls_exit ls_length separator_length
+
+            ls_output=$(ls --color=always -FCsdh -- "${files[@]}" | tee /dev/tty)
+            ls_exit="$?"
+
+            if [[ "$ls_exit" -ne 0 ]]; then
+                echo "File not found. Aborting."
+                return "$ls_exit"
+            fi
+
+            ls_output=$(sed 's/\x1B\[[0-9;]*[a-zA-Z]//g' <<< "$ls_output") # Strip ANSI color codes
+            ls_length=$(echo "$ls_output" | wc -m)
+
+            # Fallback to tput if $COLUMNS is not set
+            local term_width="${COLUMNS:-$(tput cols)}"
+
+            # Print a separator of the length of the output of ls, up to the width of the terminal
+            separator_length=$(( ls_length < term_width ? ls_length : term_width ))
+            printf "%${separator_length}s\n" | sed 's/ /─/g' # tr does not support unicode characters
+        else
+            echo "No files specified. Aborting."
+            return 1
+        fi
+
+        # Call rm with all original arguments
+        local rm_output rm_exit
+
+        rm_output=$(command rm -Iv "$@" | tee /dev/tty)
+        rm_exit="$?"
+
+        if [[ -z "$rm_output" ]]; then
+            echo "Aborted. No files deleted." >&2
+        fi
+
+        return "$rm_exit"
+    }
+fi
