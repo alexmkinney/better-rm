@@ -45,7 +45,7 @@ if [[ $- == *i* ]]; then
             ls_exit="$?"
 
             if [[ "$ls_exit" -ne 0 ]]; then
-                echo "File not found. Aborting."
+                echo "File not found. Aborting." >&2
                 return "$ls_exit"
             fi
 
@@ -59,7 +59,7 @@ if [[ $- == *i* ]]; then
             separator_length=$(( ls_length < term_width ? ls_length : term_width ))
             printf "%${separator_length}s\n" | sed 's/ /─/g' # tr does not support unicode characters
         elif ((!help_ver_flag_seen)); then
-            echo "No files specified. Aborting."
+            echo "No files specified. Aborting." >&2
             return 1
         fi
 
