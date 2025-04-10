@@ -21,18 +21,24 @@ if [[ $- == *i* ]]; then
 
             if (( dashdash_seen )); then
                 files+=("$arg")
-            elif [[ "$arg" == "--" ]]; then
-                dashdash_seen=1
-            elif [[ "$arg" == "-"* ]]; then
-                continue  # Skip options
             else
-                files+=("$arg")
+                case "$arg" in
+                    --)
+                        dashdash_seen=1
+                        ;;
+                    -*)
+                        continue # Skip options
+                        ;;
+                    *)
+                        files+=("$arg")
+                        ;;
+                esac
             fi
         done
 
         # Only pass files/directories to ls, without options
         # Exit if no files (but let lone --help and --version through)
-        if ((${#files[@]})) || ((help_ver_flag_seen)); then
+        if ((${#files[@]})); then
             local ls_output ls_exit ls_length separator_length
 
             ls_output=$(ls --color=always -FCsdh -- "${files[@]}" | tee /dev/tty)
@@ -52,7 +58,7 @@ if [[ $- == *i* ]]; then
             # Print a separator of the length of the output of ls, up to the width of the terminal
             separator_length=$(( ls_length < term_width ? ls_length : term_width ))
             printf "%${separator_length}s\n" | sed 's/ /─/g' # tr does not support unicode characters
-        else
+        elif ((!help_ver_flag_seen)); then
             echo "No files specified. Aborting."
             return 1
         fi
